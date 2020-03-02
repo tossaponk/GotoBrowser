@@ -16,9 +16,12 @@ android {
         buildTypes {
             debug {
                 applicationIdSuffix ".debug"
+                resValue "string", "app_name_build", "GotoBrowserD"
+                /*debuggable true*/
             }
             release {
                 minifyEnabled true
+                resValue "string", "app_name_build", "@string/app_name"
                 proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             }
         }

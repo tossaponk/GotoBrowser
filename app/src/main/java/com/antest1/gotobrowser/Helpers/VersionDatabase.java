@@ -7,12 +7,12 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 
-import com.crashlytics.android.Crashlytics;
 import com.google.gson.JsonObject;
 
-import java.util.Locale;
-
-import androidx.annotation.Nullable;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
 
 public class VersionDatabase extends SQLiteOpenHelper {
     private Context context;
@@ -28,7 +28,9 @@ public class VersionDatabase extends SQLiteOpenHelper {
         StringBuffer sb = new StringBuffer();
         sb.append(" CREATE TABLE IF NOT EXISTS ".concat(table_name).concat(" ( "));
         sb.append(" KEY TEXT PRIMARY KEY, ");
-        sb.append(" VALUE TEXT ) ");
+        sb.append(" `Version` TEXT, ");
+        sb.append(" `Date` TEXT DEFAULT 'none', ");
+        sb.append(" `MaxAge` TEXT DEFAULT 0 ) ");
         db.execSQL(sb.toString());
     }
 
@@ -48,29 +50,68 @@ public class VersionDatabase extends SQLiteOpenHelper {
     }
 
     // for kca_userdata
-    public String getValue(String key) {
+    public String getVersion(String key) {
         String value = "_none_";
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor c = db.query(table_name, null, "KEY=?", new String[]{key}, null, null, null, null);
         try {
             if (c != null && c.getCount() > 0) {
                 c.moveToFirst();
-                value = c.getString(c.getColumnIndex("VALUE"));
+                value = c.getString(c.getColumnIndex("Version"));
             }
         } catch (Exception e) {
             KcUtils.reportException(e);
         } finally {
             if (c != null) c.close();
         }
-        Log.e("GOTO", "getValue " + key + " " + value);
+        Log.e("GOTO", "getVersion " + key + " " + value);
         return value;
     }
 
-    public void putValue(String key, String value) {
+    public JsonObject getCacheInfo(String key)
+    {
+        JsonObject resultJson = null;
+        String value = "_none_";
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor c = db.query(table_name, null, "KEY=?", new String[]{key}, null, null, null, null);
+        try {
+            if (c != null && c.getCount() > 0) {
+                c.moveToFirst();
+                resultJson = new JsonObject();
+                resultJson.addProperty("date", c.getString(c.getColumnIndex("Date")) );
+                resultJson.addProperty("maxAge", c.getString(c.getColumnIndex("MaxAge")) );
+            }
+        } catch (Exception e) {
+            KcUtils.reportException(e);
+        } finally {
+            if (c != null) c.close();
+        }
+
+        if( resultJson != null )
+            Log.e("GOTO", "getCacheInfo " + key + " " + resultJson.get("date").getAsString() + " " + resultJson.get("maxAge").getAsString() );
+        else
+            Log.e("GOTO", "getCacheInfo " + key );
+
+        return resultJson;
+    }
+
+    public void putVersion(String key, String value) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put("KEY", key);
-        values.put("VALUE", value);
+        values.put("Version", value);
+        int u = db.update(table_name, values, "KEY=?", new String[]{key});
+        if (u == 0) {
+            db.insertWithOnConflict(table_name, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        }
+    }
+
+    public void putCacheInfo(String key, String date, String maxAge) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("KEY", key);
+        values.put("Date", date);
+        values.put("MaxAge", maxAge);
         int u = db.update(table_name, values, "KEY=?", new String[]{key});
         if (u == 0) {
             db.insertWithOnConflict(table_name, null, values, SQLiteDatabase.CONFLICT_REPLACE);
@@ -88,7 +129,7 @@ public class VersionDatabase extends SQLiteOpenHelper {
                     Log.e("GOTO", "key: " + key);
                     for (String p: prefix.keySet()) {
                         if (key.startsWith(p)) {
-                            putValue(key, prefix.get(p).getAsString());
+                            putVersion(key, prefix.get(p).getAsString());
                             Log.e("GOTO", key + " -> " + prefix.get(p).getAsString());
                             break;
                         }

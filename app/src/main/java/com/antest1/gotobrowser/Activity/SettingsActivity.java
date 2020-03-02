@@ -224,7 +224,7 @@ public class SettingsActivity extends AppCompatActivity {
         item.addProperty("locale_code", code);
         item.addProperty("selected", code.equals(current_locale));
         item.addProperty("locale_label", String.format(Locale.US, "%s (%s)", label, code));
-        item.addProperty("current_commit", versionTable.getValue(filename));
+        item.addProperty("current_commit", versionTable.getVersion(filename));
         item.addProperty("latest_commit", latest);
         item.addProperty("download_url", path);
         return item;
@@ -302,7 +302,7 @@ public class SettingsActivity extends AppCompatActivity {
                 FileOutputStream fos = new FileOutputStream(subtitle_file);
                 fos.write(data.toString().getBytes());
                 fos.close();
-                versionTable.putValue(filename, commit);
+                versionTable.putVersion(filename, commit);
                 adapter.itemCommitUpdate(locale_code);
                 adapter.notifyDataSetChanged();
                 message = "Saved: quotes_".concat(locale_code).concat(".json");

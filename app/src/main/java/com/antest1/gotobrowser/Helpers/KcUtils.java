@@ -13,17 +13,19 @@ import com.google.gson.JsonObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
@@ -143,7 +145,7 @@ public class KcUtils {
                     while ((count = zis.read(buffer)) != -1) {
                         fout.write(buffer, 0, count);
                     }
-                    if (version != null) db.putValue(path + filename, version);
+                    if (version != null) db.putVersion(path + filename, version);
                     Log.e("GOTO", "cache resource " + path + filename +  ": " + version);
                     fout.close();
                 }
@@ -186,7 +188,12 @@ public class KcUtils {
         }
     }
 
-    public static String downloadResource(OkHttpClient client, String fullpath, String last_modified, File file) {
+    public static Map<String,String> downloadResource(OkHttpClient client, String fullpath, String last_modified, File file) {
+        Map<String,String> result = new HashMap<>();
+        result.put( "status", "0" );
+        result.put( "lastModified", "" );
+        result.put( "date", "" );
+        result.put( "maxAge", "0" );
         Request.Builder builder = new Request.Builder().url(fullpath);
         if (last_modified != null && !VersionDatabase.isDefaultValue(last_modified)) {
             builder.addHeader("If-Modified-Since", last_modified);
@@ -201,6 +208,8 @@ public class KcUtils {
             if (response.code() == 200) {
                 Log.e("GOTO", "200 OK " + fullpath);
                 String new_last_modified = response.header("Last-Modified", "none");
+                String data_date = response.header("Date", "none");
+                String cache_hdr = response.header("Cache-Control", "no-cache");
                 ResponseBody body = response.body();
                 if (body != null) {
                     InputStream in = body.byteStream();
@@ -214,10 +223,23 @@ public class KcUtils {
                     fos.close();
                     body.close();
                 }
-                return new_last_modified;
+
+                if( !cache_hdr.contains("no-cache") )
+                {
+                    Pattern ptMaxAge = Pattern.compile( ".*max-age=([0-9]+).*" );
+                    Matcher mcMaxAge = ptMaxAge.matcher( cache_hdr );
+                    mcMaxAge.matches();
+                    result.put( "maxAge", mcMaxAge.group(1) );
+                }
+
+                result.put( "status", "200" );
+                result.put( "lastModified", new_last_modified );
+                result.put( "date", data_date );
+                return result;
             } else if (response.code() == 304) {
                 Log.e("GOTO", "304 Not Modified " + fullpath);
-                return "304";
+                result.put( "status", "304" );
+                return result;
             }
         } catch (Exception e) {
             KcUtils.reportException(e);

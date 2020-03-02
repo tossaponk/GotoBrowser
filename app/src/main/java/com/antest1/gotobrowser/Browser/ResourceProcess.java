@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import okhttp3.OkHttpClient;
@@ -231,10 +232,34 @@ public class ResourceProcess {
             is_last_modified = true;
         }
 
-        String version_tb = versionTable.getValue(path);
+        String version_tb = versionTable.getVersion(path);
         boolean update_flag = version_tb == null || !version_tb.equals(version);
         update_info.addProperty("version", is_last_modified ? version_tb : version);
         update_info.addProperty("is_last_modified", is_last_modified);
+
+        // Last check for caching freshness before asking the server to verify the data
+        // Only use the cache control if last modified time is used.
+        if( is_last_modified && update_flag )
+        {
+            JsonObject cache_tb = versionTable.getCacheInfo(path);
+            if( cache_tb != null )
+            {
+                SimpleDateFormat rfc7231Fmt = new SimpleDateFormat("E, dd MMM yyyy HH:mm:ss z");
+                try {
+                    Date cacheDate = rfc7231Fmt.parse(cache_tb.get("date").getAsString());
+                    Date nowDate = new Date();
+                    Date staleDate = new Date( cacheDate.getTime() + cache_tb.get("maxAge").getAsLong() * 1000 );
+                    if( nowDate.getTime() < staleDate.getTime() )
+                    {
+                        update_flag = false;
+                        Log.e("GOTO-R", "check resource: " + path + " Cache still fresh. Skipping update.");
+                    }
+                } catch (ParseException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
         update_info.addProperty("update_flag", update_flag);
         Log.e("GOTO-R", "check resource " + path + ": " + version);
         Log.e("GOTO-R", update_info.toString());
@@ -257,17 +282,18 @@ public class ResourceProcess {
             Log.e("GOTO", "requested: " + file.getPath());
             if (update_flag || !file.exists()) {
                 KcPngCompress.removeCompressedFile(out_file_path);
-                String result = downloadResource(resourceClient, resource_url, last_modified, file);
+                Map<String,String> result = downloadResource(resourceClient, resource_url, last_modified, file);
                 String new_value = version;
-                if (new_value.length() == 0 || VersionDatabase.isDefaultValue(new_value)) new_value = result;
+                if (new_value.length() == 0 || VersionDatabase.isDefaultValue(new_value)) new_value = result.get("lastModified");
                 if (result == null) {
                     Log.e("GOTO", "return null: " + path + " " + new_value);
                     return null;
-                } else if (result.equals("304")) {
+                } else if (result.get("status").equals("304")) {
                     Log.e("GOTO", "load 304 resource: " + path + " " + new_value);
                 } else {
                     Log.e("GOTO", "cache resource: " + path + " " + new_value);
-                    versionTable.putValue(path, new_value);
+                    versionTable.putVersion(path, new_value);
+                    versionTable.putCacheInfo(path, result.get("date"), result.get("maxAge"));
                 }
             } else {
                 Log.e("GOTO", "load cached resource: " + file.getPath() + " " + version);
@@ -344,18 +370,19 @@ public class ResourceProcess {
 
         File file = new File(out_file_path);
         if (update_flag) {
-            String result = downloadResource(resourceClient, resource_url, last_modified, file);
+            Map<String,String> result = downloadResource(resourceClient, resource_url, last_modified, file);
             String new_value = version;
             if (new_value.length() == 0 || VersionDatabase.isDefaultValue(new_value))
-                new_value = result;
+                new_value = result.get("lastModified");
             if (result == null) {
                 Log.e("GOTO", "return null: " + path + " " + new_value);
                 return null;
-            } else if (result.equals("304")) {
+            } else if (result.get("status").equals("304")) {
                 Log.e("GOTO", "load cached resource: " + path + " " + new_value);
             } else {
                 Log.e("GOTO", "cache resource: " + path + " " + new_value);
-                versionTable.putValue(path, new_value);
+                versionTable.putVersion(path, new_value);
+                versionTable.putCacheInfo(path, result.get("date"), result.get("maxAge"));
             }
         } else {
             Log.e("GOTO", "load cached resource: " + path + " " + version);

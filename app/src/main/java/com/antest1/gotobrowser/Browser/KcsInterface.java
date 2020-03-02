@@ -116,6 +116,11 @@ public class KcsInterface {
         }
         bundle.putByteArray("response", responseBytes);
         intent.putExtras(bundle);
+
+        // Make debug build works with kcanotify passive mode by removing debug suffix
+        String act = intent.getAction();
+        act = act.replace( ".debug", "" );
+        intent.setAction( act );
         Log.e("GOTO", "broadcast sent: " + url);
         activity.sendBroadcast(intent);
     }
