@@ -255,7 +255,6 @@ public class BrowserActivity extends AppCompatActivity {
         mContentView.resumeTimers();
         mContentView.getSettings().setTextZoom(100);
         manager.runMuteScript(mContentView, isMuteMode);
-        WebView.setWebContentsDebuggingEnabled(true);
     }
 
     @Override
@@ -297,7 +296,7 @@ public class BrowserActivity extends AppCompatActivity {
         int adjust_vpadding = sharedPref.getInt(PREF_VPADDING, 0);
         if (mSeekBarH != null) mSeekBarH.setProgress(adjust_padding);
         setSubtitleMargin(adjust_padding);
-        if (isStartedFlag && !isInPictureInPictureMode) {
+        if (isStartedFlag && !pause_flag && !isInPictureInPictureMode) {
             if (adjust_layout) mContentView.evaluateJavascript(
                     String.format(Locale.US, RESIZE_CALL, adjust_padding, adjust_vpadding), null);
         }
